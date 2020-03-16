@@ -96,9 +96,9 @@ def table_summary_df(df):
 #having same date/time that are populated in various columns.  In case of rows where same
 #column is populated as previous, coincident row, no consolidation occurs unless
 #column is in a separate, 'override' list. This version of the function assumes
-#index is consecutive integers starting at 0 (could rewrite with .loc 
+#index is consecutive integers starting at 0 (could rewrite with .loc
 #instead of .iloc to eliminate this requirement)
-#Version of 3/4/20
+#Version of 3/16/20
 
 def RollupCoincidentRows(df, dt_col, lst_cols, lst_override, IsFlagConflicts, IsDeleteCoinc):
 

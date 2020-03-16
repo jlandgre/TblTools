@@ -1,0 +1,11 @@
+﻿timestamp,Its_on,Its_off,Other,Comment
+1/8/20 2:00,1,,,Coincident - Should roll up
+1/8/20 2:00,,,300,Coincident - Should roll up
+1/8/20 3:00,,1,,Not coincident
+1/8/20 4:00,2,,,Conflict
+1/8/20 4:00,1,,,Conflict
+1/8/20 4:30,,,400,Not coincident
+1/8/20 16:00,,,100,Coincident - Should roll up
+1/8/20 16:00,,3,,Coincident - Should roll up
+1/8/20 16:00,1,,,Coincident - Should roll up
+1/8/20 20:00,,,800,Not coincident
