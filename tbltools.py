@@ -93,50 +93,52 @@ def table_summary_df(df):
     return(summary_df)
 
 #Returns consolidated df with coincident rows rolled up. Coincident refers to rows
-#having same date/time that are populated in various columns.  In case of rows where same
+#having same date/time where rows are populated in various columns.  In case of rows where same
 #column is populated as previous, coincident row, no consolidation occurs unless
-#column is in a separate, 'override' list. This version of the function assumes
-#index is consecutive integers starting at 0 (could rewrite with .loc
-#instead of .iloc to eliminate this requirement)
-#Version of 3/16/20
+#column is in a separate, 'override' list.
+#Version of 3/16/20 - uses .loc instead of .iloc; consolidates "downward"
 
-def RollupCoincidentRows(df, dt_col, lst_cols, lst_override, IsFlagConflicts, IsDeleteCoinc):
+def RollupCoincidentRows(df_in, dt_col, lst_cols, lst_override, IsFlagConflicts, IsDeleteCoinc):
+
+    df = df_in.copy()
 
     #Add flag columns and populate with defaults
     kp_col, confl_col, coinc_col = 'keep', 'RowConflict', 'IsCoincident'
     df[kp_col], df[confl_col], df[coinc_col] = True, False, False
 
-    for idx, row in df.iterrows():
-        if idx == 0: continue
+    #Start with second row
+    idxFirst = df.index.values[0]
+    for idx, row in df.iloc[1:].iterrows():
 
         #Skip rows already flagged for deletion
-        iPrev = idx - 1
-        while iPrev > 0 and not df[kp_col].iloc[iPrev]:
-            iPrev = iPrev - 1
+        idxPrev = IndexPrev(df, idx)
+        while idxPrev == idxFirst and not df[kp_col].loc[idxPrev]:
+            idxPrev = IndexPrev(df, idxPrev)
 
-        #Consolidate if i and iPrev are coincident and i's data don't conflict
-        if row[dt_col] == df[dt_col].iloc[iPrev]:
-            df[coinc_col].iloc[idx], df[coinc_col].iloc[iPrev] = True, True
+        #Consolidate if idx and idxPrev are coincident and idx's data don't conflict
+        if row[dt_col] == df[dt_col].loc[idxPrev]:
+            df[coinc_col].loc[idx], df[coinc_col].loc[idxPrev] = True, True
 
             #Default is no conflicts; keep=False for row i
             IsIrresolvable, IsConflict = False, False
-            df[kp_col].iloc[idx] = False
+            df[kp_col].loc[idxPrev] = False
 
             #Check each column
             for col in lst_cols:
-                if not IsRowConflict(df, idx,iPrev, col):
-                    if IsNullCell(df, iPrev, col): df[col].iloc[iPrev] = row[col]
+                if not IsRowConflict(df, idx,idxPrev, col):
+                    if IsNullCell(df, idx, col): df[col].loc[idx] = df[col].loc[idxPrev]
+
                 elif col in lst_override:
-                    df[col].iloc[iPrev] = row[col]
                     IsConflict = True
                 else: IsConflict, IsIrresolvable = True, True
 
                 #Flag conflict whether overridden or not
                 if IsConflict and IsFlagConflicts:
-                    df[confl_col].iloc[iPrev], df[confl_col].iloc[idx] = True, True
+                    df[confl_col].loc[idxPrev], df[confl_col].loc[idx] = True, True
 
             #Don't drop the row if unresolved conflicts
-            if IsIrresolvable: df[kp_col].iloc[idx] = True
+            if IsIrresolvable: df[kp_col].loc[idxPrev] = True
+
 
     #Return after dropping flagged rows and Boolean columns
     if IsDeleteCoinc:
@@ -146,12 +148,16 @@ def RollupCoincidentRows(df, dt_col, lst_cols, lst_override, IsFlagConflicts, Is
     else:
         return df
 
-def IsRowConflict(df, i, iPrev, col):
-    if not IsNullCell(df, iPrev, col):
-        if not IsNullCell(df, i, col): return True
+def IsRowConflict(df, idx, idxPrev, col):
+    if not IsNullCell(df, idxPrev, col):
+        if not IsNullCell(df, idx, col): return True
     return False
 
 #TRUE if row i of df col is NaN
-def IsNullCell(df, i, col):
-    if pd.isnull(df[col].iloc[i]): return True
+def IsNullCell(df, idx, col):
+    if pd.isnull(df[col].loc[idx]): return True
     return False
+
+#Returns the index of the previous row
+def IndexPrev(df, idx):
+    return df.index.values[df.index.get_loc(idx) - 1]
