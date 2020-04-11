@@ -93,52 +93,61 @@ def table_summary_df(df):
     return(summary_df)
 
 #Returns consolidated df with coincident rows rolled up. Coincident refers to rows
-#having same date/time where rows are populated in various columns.  In case of rows where same
+#having same date/time that are populated in various columns.  In case of rows where same
 #column is populated as previous, coincident row, no consolidation occurs unless
 #column is in a separate, 'override' list.
 #Version of 3/16/20 - uses .loc instead of .iloc; consolidates "downward"
+#Version of 4/11/20 - fixed issue with non-consecutive index.  Now flexible to whatever index because of
+#                    df.index.get_loc(idx) to convert everything to .iloc/row sequence basis
 
-def RollupCoincidentRows(df_in, dt_col, lst_cols, lst_override, IsFlagConflicts, IsDeleteCoinc):
-
-    df = df_in.copy()
+def RollupCoincidentRows(df, dt_col, lst_cols, lst_override, IsFlagConflicts, IsDeleteCoinc):
+    df = df.copy()
 
     #Add flag columns and populate with defaults
     kp_col, confl_col, coinc_col = 'keep', 'RowConflict', 'IsCoincident'
-    df[kp_col], df[confl_col], df[coinc_col] = True, False, False
+    df.loc[:,kp_col], df.loc[:,confl_col], df.loc[:, coinc_col] = True, False, False
 
-    #Start with second row
-    idxFirst = df.index.values[0]
-    for idx, row in df.iloc[1:].iterrows():
+    #Record column indices for lst_cols, kp_col, confl_col and coinc_col
+    lst_col_indices = []
+    for col in lst_cols:
+        lst_col_indices.append(df.columns.get_loc(col))
+    j_kp_col = df.columns.get_loc(kp_col)
+    j_confl_col = df.columns.get_loc(confl_col)
+    j_coinc_col = df.columns.get_loc(coinc_col)
+    j_dt_col = df.columns.get_loc(dt_col)
+
+    for idx, row in df.iterrows():
+        i = df.index.get_loc(idx)
+        if i == 0: continue
 
         #Skip rows already flagged for deletion
-        idxPrev = IndexPrev(df, idx)
-        while idxPrev == idxFirst and not df[kp_col].loc[idxPrev]:
-            idxPrev = IndexPrev(df, idxPrev)
+        iPrev = i - 1
+        while iPrev > 0 and not df.iloc[iPrev,j_kp_col]:
+            iPrev = iPrev - 1
 
-        #Consolidate if idx and idxPrev are coincident and idx's data don't conflict
-        if row[dt_col] == df[dt_col].loc[idxPrev]:
-            df[coinc_col].loc[idx], df[coinc_col].loc[idxPrev] = True, True
+        #Consolidate if i and iPrev are coincident and i's data don't conflict
+        if row[dt_col] == df.iloc[iPrev, j_dt_col]:
+            df.iloc[i, j_coinc_col], df.iloc[iPrev, j_coinc_col] = True, True
 
             #Default is no conflicts; keep=False for row i
             IsIrresolvable, IsConflict = False, False
-            df[kp_col].loc[idxPrev] = False
+            df.iloc[i, j_kp_col] = False
 
             #Check each column
-            for col in lst_cols:
-                if not IsRowConflict(df, idx,idxPrev, col):
-                    if IsNullCell(df, idx, col): df[col].loc[idx] = df[col].loc[idxPrev]
-
+            for col, j in zip(lst_cols,lst_col_indices):
+                if not IsRowConflict(df, i,iPrev, col):
+                    if IsNullCell(df, iPrev, col): df.iloc[iPrev,j] = row[col]
                 elif col in lst_override:
+                    df.iloc[iPrev,j] = row[col]
                     IsConflict = True
                 else: IsConflict, IsIrresolvable = True, True
 
                 #Flag conflict whether overridden or not
                 if IsConflict and IsFlagConflicts:
-                    df[confl_col].loc[idxPrev], df[confl_col].loc[idx] = True, True
+                    df.iloc[iPrev, j_coinc_col], df.iloc[i, j_confl_col] = True, True
 
             #Don't drop the row if unresolved conflicts
-            if IsIrresolvable: df[kp_col].loc[idxPrev] = True
-
+            if IsIrresolvable: df.iloc[i, j_kp_col] = True
 
     #Return after dropping flagged rows and Boolean columns
     if IsDeleteCoinc:
@@ -148,16 +157,17 @@ def RollupCoincidentRows(df_in, dt_col, lst_cols, lst_override, IsFlagConflicts,
     else:
         return df
 
-def IsRowConflict(df, idx, idxPrev, col):
-    if not IsNullCell(df, idxPrev, col):
-        if not IsNullCell(df, idx, col): return True
+def IsRowConflict(df, i, iPrev, col):
+    if not IsNullCell(df, iPrev, col):
+        if not IsNullCell(df, i, col): return True
     return False
 
 #TRUE if row i of df col is NaN
-def IsNullCell(df, idx, col):
-    if pd.isnull(df[col].loc[idx]): return True
+def IsNullCell(df, i, col):
+    if pd.isnull(df[col].iloc[i]): return True
     return False
 
-#Returns the index of the previous row
+#Returns the index of the previous row (not used)
 def IndexPrev(df, idx):
     return df.index.values[df.index.get_loc(idx) - 1]
+    
